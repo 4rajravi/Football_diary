@@ -7,6 +7,7 @@ venv/
 # Database
 *.db
 *.db.backup_*
+*.db.bak_*
 
 # Node
 node_modules/
