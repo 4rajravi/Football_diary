@@ -2,9 +2,16 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getCompetitions } from '../services/api'
 
-const LEAGUE_ICONS = {
-  GB1: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', ES1: '🇪🇸', L1: '🇩🇪', IT1: '🇮🇹', FR1: '🇫🇷',
-  CL: '🏆', EL: '🏆', WC: '🌍', EURO: '🇪🇺',
+const LEAGUE_LOGOS = {
+  GB1: '/assets/logo/GB1.png',
+  ES1: '/assets/logo/ES1.png',
+  L1: '/assets/logo/L1.png',
+  IT1: '/assets/logo/IT1.png',
+  FR1: '/assets/logo/FR1.png',
+  CL: '/assets/logo/CL.png',
+  EL: '/assets/logo/EL.png',
+  WC: '/assets/logo/WC.png',
+  EURO: '/assets/logo/EURO.png',
 }
 
 const LEAGUE_COLORS = {
@@ -88,7 +95,11 @@ function CompetitionCard({ comp }) {
                   hover:scale-[1.02] transition-transform duration-200`}
     >
       <div className="flex items-center gap-3">
-        <span className="text-2xl">{LEAGUE_ICONS[id] || '⚽'}</span>
+        <img
+          src={LEAGUE_LOGOS[id] || '/assets/logo/default.png'}
+          alt={comp.name}
+          className="w-8 h-8 object-contain"
+        />
         <div>
           <div className="font-semibold">{comp.name}</div>
           <div className="text-sm text-white/40">

@@ -2,20 +2,39 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-pitch text-white antialiased;
+@layer base {
+  body {
+    /* Use a very subtle radial gradient to prevent a "flat" look */
+    background: radial-gradient(circle at top center, #0f172a 0%, #020617 100%);
+    @apply text-slate-300 antialiased selection:bg-accent-cyan/30;
+  }
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
-
-/* Chat message animation */
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+/* 1. Sharp Hairline Borders */
+.border-sharp {
+  @apply border-white/[0.08] border-[0.5px];
 }
-.animate-fade-in {
-  animation: fadeInUp 0.3s ease-out;
+
+/* 2. Glassmorphism (Premium Depth) */
+.glass-panel {
+  @apply bg-night-900/40 backdrop-blur-md border-sharp rounded-lg;
+}
+
+/* 3. Improved Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { 
+  background: rgba(255, 255, 255, 0.1); 
+  border-radius: 10px; 
+}
+::-webkit-scrollbar-thumb:hover { background: #22d3ee88; }
+
+/* 4. Scanning/Data Animation (Optional World Monitor Vibe) */
+@keyframes scan {
+  from { opacity: 0.5; }
+  to { opacity: 1; }
+}
+.data-text {
+  @apply font-mono uppercase tracking-wider text-[10px];
+  animation: scan 1.5s infinite alternate;
 }
