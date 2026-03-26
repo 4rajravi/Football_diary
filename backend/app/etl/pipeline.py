@@ -224,7 +224,10 @@ JOIN games g ON cg.game_id = g.game_id;
 CREATE VIEW IF NOT EXISTS v_standings AS
 SELECT
     cg.club_id,
-    cl.name AS club_name,
+    COALESCE(cl.name,
+        MAX(CASE WHEN g.home_club_id = cg.club_id THEN g.home_club_name ELSE NULL END),
+        MAX(CASE WHEN g.away_club_id = cg.club_id THEN g.away_club_name ELSE NULL END)
+    ) AS club_name,
     g.competition_id,
     g.season,
     COUNT(*)                                 AS played,

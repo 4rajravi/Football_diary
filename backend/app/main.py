@@ -41,8 +41,8 @@ def get_standings(competition_id: str, season: int, stage: str = "all"):
     stage: 'all' for leagues, 'Group A' etc for cup groups, 'knockout' for knockout results."""
     if stage == "knockout":
         rows = execute_readonly(
-            """SELECT g.round, g.date, g.home_club_name, g.away_club_name,
-                      g.home_club_goals, g.away_club_goals, g.aggregate, g.stadium
+            """SELECT g.game_id, g.round, g.date, g.home_club_name, g.away_club_name,
+                      g.home_club_goals, g.away_club_goals, g.home_club_id, g.away_club_id, g.stadium
                FROM games g
                WHERE g.competition_id = ? AND CAST(g.season AS TEXT) = ?
                  AND g.round NOT LIKE 'Group%'
@@ -51,10 +51,38 @@ def get_standings(competition_id: str, season: int, stage: str = "all"):
                ORDER BY g.date""",
             (competition_id, str(season)),
         )
+        # Compute real aggregates by pairing 1st/2nd legs
+        for row in rows:
+            row["aggregate"] = None
+            rnd = row.get("round", "")
+            rnd_lower = rnd.lower()
+            if "1st leg" in rnd_lower or "2nd leg" in rnd_lower:
+                base_round = rnd_lower.replace("1st leg", "").replace("2nd leg", "").strip()
+                home_id = row["home_club_id"]
+                away_id = row["away_club_id"]
+                # Find the other leg (teams are swapped)
+                other = [r for r in rows
+                         if r["game_id"] != row["game_id"]
+                         and r.get("round", "").lower().replace("1st leg", "").replace("2nd leg", "").strip() == base_round
+                         and r["home_club_id"] == away_id
+                         and r["away_club_id"] == home_id]
+                if other:
+                    leg1_home = int(row["home_club_goals"] or 0)
+                    leg1_away = int(row["away_club_goals"] or 0)
+                    leg2_home = int(other[0]["home_club_goals"] or 0)
+                    leg2_away = int(other[0]["away_club_goals"] or 0)
+                    # Aggregate from home team's perspective in THIS row
+                    agg_home = leg1_home + leg2_away
+                    agg_away = leg1_away + leg2_home
+                    row["aggregate"] = f"{agg_home}:{agg_away}"
         return {"knockout": rows, "competition_id": competition_id, "season": season}
     elif stage.startswith("Group"):
         rows = execute_readonly(
-            """SELECT cg.club_id, cl.name AS club_name,
+            """SELECT cg.club_id,
+                      COALESCE(cl.name,
+                        MAX(CASE WHEN g.home_club_id = cg.club_id THEN g.home_club_name ELSE NULL END),
+                        MAX(CASE WHEN g.away_club_id = cg.club_id THEN g.away_club_name ELSE NULL END)
+                      ) AS club_name,
                       COUNT(*) AS played,
                       SUM(CASE WHEN CAST(cg.own_goals AS INTEGER) > CAST(cg.opponent_goals AS INTEGER) THEN 1 ELSE 0 END) AS wins,
                       SUM(CASE WHEN CAST(cg.own_goals AS INTEGER) = CAST(cg.opponent_goals AS INTEGER) THEN 1 ELSE 0 END) AS draws,
@@ -69,7 +97,7 @@ def get_standings(competition_id: str, season: int, stage: str = "all"):
                JOIN games g ON cg.game_id = g.game_id
                LEFT JOIN clubs cl ON cg.club_id = cl.club_id
                WHERE g.competition_id = ? AND CAST(g.season AS TEXT) = ? AND g.round = ?
-               GROUP BY cg.club_id
+               GROUP BY cg.club_id, cl.name
                ORDER BY points DESC, goal_difference DESC, goals_for DESC""",
             (competition_id, str(season), stage),
         )
