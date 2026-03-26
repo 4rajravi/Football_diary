@@ -111,58 +111,6 @@ export default function StandingsPage() {
       )}
 
       {/* Tabs */}
-      {/* Stage selector for cups */}
-      {isCup && (
-        <div className="flex gap-2 mb-4 flex-wrap">
-          {groups.map(g => (
-            <button
-              key={g}
-              onClick={() => setSelectedStage(g)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                selectedStage === g ? 'bg-white/15 text-white' : 'bg-white/5 text-white/40 hover:text-white'
-              }`}
-            >
-              {g}
-            </button>
-          ))}
-          <button
-            onClick={() => setSelectedStage('knockout')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              selectedStage === 'knockout' ? 'bg-white/15 text-white' : 'bg-white/5 text-white/40 hover:text-white'
-            }`}
-          >
-            Knockout
-          </button>
-        </div>
-      )}
-
-      {/* Tabs */}
-      {/* Stage selector for cups */}
-      {isCup && (
-        <div className="flex gap-2 mb-4 flex-wrap">
-          {groups.map(g => (
-            <button
-              key={g}
-              onClick={() => setSelectedStage(g)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                selectedStage === g ? 'bg-white/15 text-white' : 'bg-white/5 text-white/40 hover:text-white'
-              }`}
-            >
-              {g}
-            </button>
-          ))}
-          <button
-            onClick={() => setSelectedStage('knockout')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              selectedStage === 'knockout' ? 'bg-white/15 text-white' : 'bg-white/5 text-white/40 hover:text-white'
-            }`}
-          >
-            Knockout
-          </button>
-        </div>
-      )}
-
-      {/* Tabs */}
       <div className="flex gap-1 mb-6 bg-white/5 rounded-lg p-1 w-fit">
         <button
           onClick={() => setTab('standings')}
