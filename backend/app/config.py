@@ -35,6 +35,6 @@ TARGET_COMPETITIONS = [
     "FR1",   # Ligue 1
     "CL",    # Champions League
     "EL",    # Europa League
-    "WC",    # FIFA World Cup
+    "FIWC",    # FIFA World Cup
     "EURO",  # UEFA Euros
 ]

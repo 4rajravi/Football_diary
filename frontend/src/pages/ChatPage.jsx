@@ -75,18 +75,18 @@ export default function ChatPage() {
               }`}
             >
               {msg.role === 'user' ? (
-                <div className="bg-white/10 rounded-2xl rounded-br-md px-4 py-3 max-w-lg">
+                <div className="bg-surface border border-border rounded-2xl rounded-br-md px-4 py-3 max-w-lg">
                   {msg.content}
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="bg-white/5 border border-white/10 rounded-2xl rounded-bl-md px-5 py-4 max-w-2xl">
+                  <div className="bg-surface border border-border rounded-2xl rounded-bl-md px-5 py-4 max-w-2xl">
                     <p className="text-white/90 leading-relaxed whitespace-pre-wrap">
                       {msg.content}
                     </p>
                   </div>
                   {msg.chart && (
-                    <div className="bg-white/5 border border-white/10 rounded-xl p-4 max-w-2xl">
+                    <div className="bg-surface border border-border rounded-xl p-4 max-w-2xl">
                       <ChartRenderer config={msg.chart} />
                     </div>
                   )}
@@ -97,8 +97,8 @@ export default function ChatPage() {
 
           {loading && (
             <div className="animate-fade-in flex items-center gap-2 text-white/40">
-              <Loader2 size={16} className="animate-spin" />
-              <span className="text-sm">Analyzing football data...</span>
+              <Loader2 size={16} className="animate-spin text-muted" />
+              <span className="text-sm text-muted">Analyzing football data...</span>
             </div>
           )}
 
@@ -116,8 +116,8 @@ export default function ChatPage() {
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ask about any match, player, or club..."
-            className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm
-                       placeholder:text-white/30 focus:outline-none focus:border-white/25
+            className="flex-1 bg-surface border border-border rounded-xl px-4 py-3 text-sm
+                       placeholder:text-muted focus:outline-none focus:border-white/20
                        transition-colors"
           />
           <button
@@ -152,8 +152,8 @@ function EmptyState({ onSuggestionClick }) {
           <button
             key={i}
             onClick={() => onSuggestionClick(s)}
-            className="text-left text-sm px-4 py-3 rounded-lg border border-white/10
-                       bg-white/5 hover:bg-white/10 transition-colors text-white/60
+            className="text-left text-sm px-4 py-3 rounded-lg border border-border
+                       bg-surface hover:bg-surface-hover transition-colors text-muted
                        hover:text-white"
           >
             {s}

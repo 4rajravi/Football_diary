@@ -5,26 +5,26 @@ export default function Navbar() {
   const { pathname } = useLocation()
 
   const linkClass = (path) =>
-    `flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+    `flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
       pathname === path || (path !== '/' && pathname.startsWith(path))
-        ? 'bg-white/10 text-white'
-        : 'text-white/60 hover:text-white hover:bg-white/5'
+        ? 'text-white'
+        : 'text-muted hover:text-white'
     }`
 
   return (
-    <nav className="border-b border-white/10 px-6 py-3 flex items-center justify-between">
-      <Link to="/" className="flex items-center gap-2">
-        <span className="text-2xl">⚽</span>
-        <span className="text-lg font-semibold tracking-tight">Football Diary</span>
+    <nav className="border-b border-border px-6 py-4 flex items-center justify-between">
+      <Link to="/" className="flex items-center gap-2.5">
+        <span className="text-xl">⚽</span>
+        <span className="text-base font-semibold tracking-tight">Football Diary</span>
       </Link>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         <Link to="/" className={linkClass('/')}>
-          <Trophy size={16} />
+          <Trophy size={15} />
           Competitions
         </Link>
         <Link to="/chat" className={linkClass('/chat')}>
-          <MessageCircle size={16} />
+          <MessageCircle size={15} />
           Ask AI
         </Link>
       </div>
