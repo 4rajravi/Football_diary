@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { getStandings, getTopScorers, getSeasons, getRounds, getCompetitions } from '../services/api'
+import { getStandings, getTopScorers, getSeasons, getRounds, getCompetitions, getMatches, getMatchDetail } from '../services/api'
+import { ChevronDown, ExternalLink } from 'lucide-react'
 
 const CUP_COMPETITIONS = ['CL', 'EL', 'FIWC', 'EURO']
 
@@ -26,6 +27,11 @@ export default function StandingsPage() {
   const [statType, setStatType] = useState('top_scorers')
   const [scorers, setScorers] = useState([])
   const [compName, setCompName] = useState(competitionId)
+
+  const [matches, setMatches] = useState([])
+  const [allMatches, setAllMatches] = useState([])
+  const [matchFilterTeam, setMatchFilterTeam] = useState('all')
+  const [matchFilterRound, setMatchFilterRound] = useState('all')
 
   useEffect(() => {
     getSeasons(competitionId).then(s => {
@@ -81,6 +87,33 @@ export default function StandingsPage() {
     }
   }, [competitionId, season, view, statType])
 
+  useEffect(() => {
+    if (!season || view !== 'matches') return
+    setLoading(true)
+    setMatchFilterTeam('all')
+    setMatchFilterRound('all')
+    getMatches(competitionId, season)
+      .then(data => {
+        setAllMatches(data)
+        setMatches(data)
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [competitionId, season, view])
+
+  useEffect(() => {
+    let filtered = allMatches
+    if (matchFilterTeam !== 'all') {
+      filtered = filtered.filter(m =>
+        m.home_club_name === matchFilterTeam || m.away_club_name === matchFilterTeam
+      )
+    }
+    if (matchFilterRound !== 'all') {
+      filtered = filtered.filter(m => m.round === matchFilterRound)
+    }
+    setMatches(filtered)
+  }, [matchFilterTeam, matchFilterRound, allMatches])
+
   return (
     <div className="max-w-5xl mx-auto px-6 py-10">
       {/* Header */}
@@ -116,6 +149,7 @@ export default function StandingsPage() {
                      focus:outline-none focus:border-white/20 cursor-pointer"
         >
           <option value="standings" className="bg-[#0a0a0a]">Standings</option>
+          <option value="matches" className="bg-[#0a0a0a]">Matches</option>
           <option value="stats" className="bg-[#0a0a0a]">Stats</option>
         </select>
 
@@ -155,6 +189,32 @@ export default function StandingsPage() {
         ) : (
           <StandingsTable data={standings} />
         )
+      ) : view === 'matches' ? (
+        <>
+          <div className="flex gap-3 mb-6">
+            <select
+              value={matchFilterRound}
+              onChange={e => setMatchFilterRound(e.target.value)}
+              className="bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-white/20 cursor-pointer"
+            >
+              <option value="all" className="bg-[#0a0a0a]">All Rounds</option>
+              {[...new Set(allMatches.map(m => m.round).filter(Boolean))].map(r => (
+                <option key={r} value={r} className="bg-[#0a0a0a]">{r}</option>
+              ))}
+            </select>
+            <select
+              value={matchFilterTeam}
+              onChange={e => setMatchFilterTeam(e.target.value)}
+              className="bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-white/20 cursor-pointer"
+            >
+              <option value="all" className="bg-[#0a0a0a]">All Teams</option>
+              {[...new Set(allMatches.flatMap(m => [m.home_club_name, m.away_club_name]).filter(Boolean))].sort().map(t => (
+                <option key={t} value={t} className="bg-[#0a0a0a]">{t}</option>
+              ))}
+            </select>
+          </div>
+          <MatchesList data={matches} />
+        </>
       ) : (
         statType === 'top_scorers' && <ScorersTable data={scorers} />
       )}
@@ -268,6 +328,222 @@ function KnockoutTable({ data }) {
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+function MatchesList({ data }) {
+  if (!data.length) return <p className="text-muted text-sm">No matches available.</p>
+
+  // Group by round
+  const grouped = data.reduce((acc, match) => {
+    const round = match.round || 'Unknown'
+    if (!acc[round]) acc[round] = []
+    acc[round].push(match)
+    return acc
+  }, {})
+
+  return (
+    <div className="space-y-6">
+      {Object.entries(grouped).map(([round, matches]) => (
+        <div key={round}>
+          <p className="text-xs text-muted uppercase tracking-widest mb-3">{round}</p>
+          <div className="bg-surface border border-border rounded-xl overflow-hidden divide-y divide-border/50">
+            {matches.map(match => (
+              <MatchCard key={match.game_id} match={match} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function MatchCard({ match }) {
+  const [expanded, setExpanded] = useState(false)
+  const [detail, setDetail] = useState(null)
+  const [loadingDetail, setLoadingDetail] = useState(false)
+
+  const handleExpand = () => {
+    if (!expanded && !detail) {
+      setLoadingDetail(true)
+      getMatchDetail(match.game_id)
+        .then(setDetail)
+        .catch(console.error)
+        .finally(() => setLoadingDetail(false))
+    }
+    setExpanded(!expanded)
+  }
+
+  const ytQuery = `${match.home_club_name} vs ${match.away_club_name} ${match.date} highlights`
+  const ytLink = `https://www.youtube.com/results?search_query=${encodeURIComponent(ytQuery)}`
+
+  return (
+    <div>
+      <div
+        onClick={handleExpand}
+        className="flex items-center gap-3 px-5 py-3.5 text-sm hover:bg-surface-hover transition-colors cursor-pointer"
+      >
+        <span className="text-muted text-xs w-20 shrink-0">{match.date}</span>
+        <span className="flex-1 text-right font-medium text-white">{match.home_club_name}</span>
+        <span className="px-3 py-1 bg-white/5 border border-border rounded font-bold text-gold min-w-[52px] text-center text-xs">
+          {match.home_club_goals} – {match.away_club_goals}
+        </span>
+        <span className="flex-1 font-medium text-white">{match.away_club_name}</span>
+        <ChevronDown
+          size={14}
+          className={`text-muted transition-transform ${expanded ? 'rotate-180' : ''}`}
+        />
+      </div>
+
+      {expanded && (
+        <div className="px-5 pb-4 animate-fade-in">
+          {/* Match info */}
+          <div className="flex gap-4 text-xs text-muted mb-4 pl-20">
+            {match.stadium && <span>{match.stadium}</span>}
+            {match.attendance && <span>Att: {Number(match.attendance).toLocaleString()}</span>}
+            {match.referee && <span>Ref: {match.referee}</span>}
+          </div>
+
+          {loadingDetail ? (
+            <div className="text-muted text-xs py-4 text-center">Loading lineups...</div>
+          ) : detail ? (
+            <>
+              {/* Events timeline */}
+              {detail.events && detail.events.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs text-muted uppercase tracking-widest mb-2">Match Events</p>
+                  <div className="bg-white/[0.02] border border-border/50 rounded-lg divide-y divide-border/30">
+                    {detail.events.map((ev, i) => (
+                      <EventRow key={i} event={ev} homeClubId={detail.match.home_club_id} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Lineups */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <p className="text-xs text-muted uppercase tracking-widest mb-2">
+                    {detail.match.home_club_name}
+                  </p>
+                  <LineupList players={detail.home_lineup} goals={detail.player_goals} assists={detail.player_assists} />
+                </div>
+                <div>
+                  <p className="text-xs text-muted uppercase tracking-widest mb-2">
+                    {detail.match.away_club_name}
+                  </p>
+                  <LineupList players={detail.away_lineup} goals={detail.player_goals} assists={detail.player_assists} />
+                </div>
+              </div>
+            </>
+          ) : null}
+
+          {/* YouTube highlights link */}
+          
+            <a href={ytLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-xs text-muted hover:text-white transition-colors mt-2">
+            <ExternalLink size={12} />
+            Watch highlights on YouTube
+          </a>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function EventRow({ event, homeClubId }) {
+  const isHome = event.club_id === homeClubId
+  const minute = event.minute ? `${event.minute}'` : ''
+
+  const cardDesc = event.description?.toLowerCase() || ''
+  const icon = event.type === 'Goals' ? '⚽'
+    : event.type === 'Cards'
+      ? (cardDesc.includes('second yellow') || cardDesc.includes('yellow-red')
+        ? '🟨🟥'
+        : cardDesc.includes('red') ? '🟥' : '🟨')
+    : event.type === 'Substitutions' ? '🔄'
+    : '•'
+
+  let desc = ''
+  if (event.type === 'Goals') {
+    desc = event.player_name || 'Goal'
+    if (event.assist_player_name) desc += ` (${event.assist_player_name})`
+  } else if (event.type === 'Cards') {
+    const d = event.description?.toLowerCase() || ''
+    const cardType = d.includes('second yellow') || d.includes('yellow-red')
+      ? 'Second Yellow → Red'
+      : d.includes('red')
+      ? 'Red'
+      : 'Yellow'
+    const cardIcon2 = d.includes('second yellow') || d.includes('yellow-red') ? '🟨🟥' : null
+    desc = `${event.player_name || 'Unknown'} · ${cardType}`
+  } else if (event.type === 'Substitutions') {
+    const inPlayer = event.player_in_name || '?'
+    const outPlayer = event.player_name || '?'
+    const reason = event.description?.toLowerCase().includes('injur') ? ' (injury)' : ''
+    desc = `${inPlayer} ↔ ${outPlayer}${reason}`
+  } else {
+    desc = event.player_name || event.description || event.type
+  }
+
+  return (
+    <div className={`flex items-center gap-2 px-3 py-1.5 text-xs ${isHome ? '' : 'flex-row-reverse text-right'}`}>
+      <span className="text-muted w-8 shrink-0 text-center">{minute}</span>
+      <span>{icon}</span>
+      <span className="text-white/80">{desc}</span>
+    </div>
+  )
+}
+
+function LineupList({ players, goals = {}, assists = {} }) {
+  if (!players || !players.length) return <p className="text-muted text-xs">No lineup data</p>
+
+  const starters = players.filter(p => p.type === 'starting_lineup')
+  const subs = players.filter(p => p.type !== 'starting_lineup')
+
+  const badges = (playerId) => {
+    const g = goals[playerId] || 0
+    const a = assists[playerId] || 0
+    if (!g && !a) return null
+    return (
+      <span className="ml-1.5 inline-flex gap-0.5">
+        {Array.from({ length: g }).map((_, i) => (
+          <span key={`g${i}`} className="text-[10px]">⚽</span>
+        ))}
+        {Array.from({ length: a }).map((_, i) => (
+          <span key={`a${i}`} className="text-emerald-400 text-[10px] font-bold">A</span>
+        ))}
+      </span>
+    )
+  }
+
+  return (
+    <div className="space-y-1">
+      {starters.map((p, i) => (
+        <div key={i} className="flex items-center gap-2 text-xs">
+          <span className="text-muted w-5 text-right">{p.number || ''}</span>
+          <span className="text-white">
+            {p.player_name}
+            {p.team_captain === '1' && <span className="text-gold ml-1">(C)</span>}
+            {badges(p.player_id)}
+          </span>
+          {p.position && <span className="text-muted">{p.position}</span>}
+        </div>
+      ))}
+      {subs.length > 0 && (
+        <>
+          <p className="text-[10px] text-muted uppercase tracking-widest pt-2">Substitutes</p>
+          {subs.map((p, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs">
+              <span className="text-muted w-5 text-right">{p.number || ''}</span>
+              <span className="text-white/50">
+                {p.player_name}
+                {badges(p.player_id)}
+              </span>
+            </div>
+          ))}
+        </>
+      )}
     </div>
   )
 }

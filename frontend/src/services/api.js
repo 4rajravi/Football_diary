@@ -44,3 +44,18 @@ export async function getHealth() {
   const { data } = await api.get('/api/admin/health')
   return data
 }
+
+export async function getMatches(competitionId, season, limit = 500, offset = 0) {
+  const { data } = await api.get(`/api/matches/${competitionId}/${season}?limit=${limit}&offset=${offset}`)
+  return data.matches
+}
+
+export async function getMatchDetail(gameId) {
+  const { data } = await api.get(`/api/match/${gameId}`)
+  return data
+}
+
+export async function getStats(competitionId, season, statType) {
+  const { data } = await api.get(`/api/stats/${competitionId}/${season}?stat_type=${statType}`)
+  return data.stats
+}
