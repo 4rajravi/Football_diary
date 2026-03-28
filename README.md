@@ -130,18 +130,6 @@ docker-compose up --build
 
 ---
 
-## Deployment
-
-| Service | Platform | Tier |
-|---------|----------|------|
-| Backend API | [Render](https://render.com) | Free |
-| Frontend | [Vercel](https://vercel.com) | Free |
-| Database | SQLite (bundled with backend) | Free |
-
-For persistent SQLite on Render, use a [persistent disk](https://render.com/docs/disks) ($0.25/GB/month) or [Turso](https://turso.tech) (free tier: 9GB).
-
----
-
 ## Known Limitations
 
 - Data available from **2012/13 season** onwards only
