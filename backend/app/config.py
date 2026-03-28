@@ -35,6 +35,6 @@ TARGET_COMPETITIONS = [
     "FR1",   # Ligue 1
     "CL",    # Champions League
     "EL",    # Europa League
-    "FIWC",    # FIFA World Cup
-    "EURO",  # UEFA Euros
 ]
+
+TOP_5_LEAGUES = ["GB1", "ES1", "L1", "IT1", "FR1"]

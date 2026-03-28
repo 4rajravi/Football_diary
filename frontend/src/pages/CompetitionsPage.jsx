@@ -10,8 +10,7 @@ const LEAGUE_LOGOS = {
   FR1: '/assets/logo/FR1.png',
   CL: '/assets/logo/CL.png',
   EL: '/assets/logo/EL.png',
-  FIWC: '/assets/logo/WC.png',
-  EURO: '/assets/logo/EURO.png',
+  ALL5: '/assets/logo/ALL5.png',
 }
 
 export default function CompetitionsPage() {
@@ -35,7 +34,7 @@ export default function CompetitionsPage() {
 
   const leagues = competitions.filter(c => c.type === 'domestic_league')
   const cups = competitions.filter(c => c.type !== 'domestic_league')
-
+  const allLeagues = { competition_id: 'ALL5', name: 'All Leagues (Top 5)', type: 'combined' }
   return (
     <div className="max-w-4xl mx-auto px-6 py-12">
       <h1 className="text-2xl font-bold mb-10">Competitions</h1>
@@ -44,6 +43,7 @@ export default function CompetitionsPage() {
         <div className="mb-10">
           <p className="text-xs text-muted uppercase tracking-widest mb-4">Domestic Leagues</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <CompetitionCard comp={allLeagues} />
             {leagues.map(comp => (
               <CompetitionCard key={comp.competition_id} comp={comp} />
             ))}

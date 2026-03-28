@@ -55,7 +55,22 @@ export async function getMatchDetail(gameId) {
   return data
 }
 
-export async function getStats(competitionId, season, statType) {
-  const { data } = await api.get(`/api/stats/${competitionId}/${season}?stat_type=${statType}`)
+export async function getStats(competitionId, season, statType, team = 'all') {
+  const { data } = await api.get(`/api/stats/${competitionId}/${season}?stat_type=${statType}&team=${encodeURIComponent(team)}`)
   return data.stats
+}
+
+export async function searchPlayers(query) {
+  const { data } = await api.get(`/api/players/search?q=${encodeURIComponent(query)}`)
+  return data.players
+}
+
+export async function getPlayerStats(playerId, season = 'all') {
+  const { data } = await api.get(`/api/players/${playerId}/stats?season=${season}`)
+  return data
+}
+
+export async function getTopPlayers(season = 'all') {
+  const { data } = await api.get(`/api/players/top?season=${season}`)
+  return data.players
 }

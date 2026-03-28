@@ -277,8 +277,42 @@ def create_views():
                       'v_club_form', 'v_standings', 'v_top_scorers']:
             conn.execute(f"DROP VIEW IF EXISTS {vname}")
         conn.executescript(VIEWS_SQL)
+        # Create pre-computed player stats table with game_events data
+        conn.execute("DROP TABLE IF EXISTS computed_player_stats")
+        conn.execute("""
+            CREATE TABLE computed_player_stats AS
+            SELECT
+                a.player_id,
+                a.player_name,
+                a.player_club_id AS club_id,
+                g.competition_id,
+                g.season,
+                COUNT(DISTINCT a.game_id) AS appearances,
+                SUM(CAST(a.minutes_played AS INTEGER)) AS total_minutes,
+                COALESCE((SELECT COUNT(*) FROM game_events ge
+                    JOIN games g2 ON ge.game_id = g2.game_id
+                    WHERE ge.player_id = a.player_id AND ge.type = 'Goals'
+                      AND g2.competition_id = g.competition_id
+                      AND g2.season = g.season), 0) AS goals,
+                COALESCE((SELECT COUNT(*) FROM game_events ge
+                    JOIN games g2 ON ge.game_id = g2.game_id
+                    WHERE ge.player_assist_id = a.player_id AND ge.type = 'Goals'
+                      AND g2.competition_id = g.competition_id
+                      AND g2.season = g.season), 0) AS assists,
+                SUM(CAST(a.yellow_cards AS INTEGER)) AS yellow_cards,
+                SUM(CAST(a.red_cards AS INTEGER)) AS red_cards
+            FROM appearances a
+            JOIN games g ON a.game_id = g.game_id
+            GROUP BY a.player_id, a.player_club_id, g.competition_id, g.season
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_cps_comp ON computed_player_stats(competition_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_cps_season ON computed_player_stats(season)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_cps_player ON computed_player_stats(player_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_cps_club ON computed_player_stats(club_id)")
+
         conn.commit()
         print("  ✓ All views created successfully")
+        print("  ✓ computed_player_stats table built")
     except Exception as e:
         print(f"  ⚠ View creation error: {e}")
     finally:

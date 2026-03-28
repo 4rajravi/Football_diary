@@ -1,14 +1,43 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { getStandings, getTopScorers, getSeasons, getRounds, getCompetitions, getMatches, getMatchDetail } from '../services/api'
+import { getStandings, getTopScorers, getSeasons, getRounds, getCompetitions, getMatches, getMatchDetail, getStats } from '../services/api'
 import { ChevronDown, ExternalLink } from 'lucide-react'
 
-const CUP_COMPETITIONS = ['CL', 'EL', 'FIWC', 'EURO']
+const CUP_COMPETITIONS = ['CL', 'EL']
 
 const LEAGUE_LOGOS = {
   GB1: '/assets/logo/GB1.png', ES1: '/assets/logo/ES1.png', L1: '/assets/logo/L1.png',
   IT1: '/assets/logo/IT1.png', FR1: '/assets/logo/FR1.png', CL: '/assets/logo/CL.png',
-  EL: '/assets/logo/EL.png', FIWC: '/assets/logo/WC.png', EURO: '/assets/logo/EURO.png',
+  EL: '/assets/logo/EL.png', ALL5: '/assets/logo/ALL5.png',
+}
+
+const ZONE_RULES = {
+  GB1: (season, i, total) => {
+    const uclSlots = Number(season) >= 2024 ? 5 : 4
+    if (i < uclSlots) return 'border-l-4 border-l-blue-500'
+    if (i >= total - 3) return 'border-l-4 border-l-red-500'
+    return ''
+  },
+  ES1: (season, i, total) => {
+    if (i < 4) return 'border-l-4 border-l-blue-500'
+    if (i >= total - 3) return 'border-l-4 border-l-red-500'
+    return ''
+  },
+  IT1: (season, i, total) => {
+    if (i < 4) return 'border-l-4 border-l-blue-500'
+    if (i >= total - 3) return 'border-l-4 border-l-red-500'
+    return ''
+  },
+  L1: (season, i, total) => {
+    if (i < 4) return 'border-l-4 border-l-blue-500'
+    if (i >= total - 2) return 'border-l-4 border-l-red-500'
+    return ''
+  },
+  FR1: (season, i, total) => {
+    if (i < 3) return 'border-l-4 border-l-blue-500'
+    if (i >= total - 2) return 'border-l-4 border-l-red-500'
+    return ''
+  },
 }
 
 export default function StandingsPage() {
@@ -26,6 +55,9 @@ export default function StandingsPage() {
 
   const [statType, setStatType] = useState('top_scorers')
   const [scorers, setScorers] = useState([])
+  const [allScorers, setAllScorers] = useState([])
+  const [statTeamFilter, setStatTeamFilter] = useState('all')
+  const [statTeamList, setStatTeamList] = useState([])
   const [compName, setCompName] = useState(competitionId)
 
   const [matches, setMatches] = useState([])
@@ -33,6 +65,11 @@ export default function StandingsPage() {
   const [matchFilterTeam, setMatchFilterTeam] = useState('all')
   const [matchFilterRound, setMatchFilterRound] = useState('all')
 
+  
+
+  useEffect(() => {
+    if (season === 'all' && view === 'matches') setView('standings')
+  }, [season])
   useEffect(() => {
     getSeasons(competitionId).then(s => {
       setSeasons(s)
@@ -46,12 +83,19 @@ export default function StandingsPage() {
 
   useEffect(() => {
     if (!season) return
-    if (isCup) {
+    if (isCup && season !== 'all') {
       getRounds(competitionId, season).then(rounds => {
         const grps = [...new Set(rounds.filter(r => r && r.startsWith('Group')))].sort()
-        const stageList = [...grps, 'knockout']
+        const hasKnockout = rounds.some(r => r && !r.startsWith('Group') && !r.startsWith('Matchday'))
+        const stageList = [...grps]
+        if (hasKnockout) stageList.push('knockout')
         setStages(stageList)
-        setSelectedStage(grps.length > 0 ? grps[0] : 'knockout')
+        if (grps.length > 0) setSelectedStage(grps[0])
+        else if (hasKnockout) setSelectedStage('knockout')
+        else setSelectedStage('all')
+      }).catch(() => {
+        setStages(['knockout'])
+        setSelectedStage('knockout')
       })
     } else {
       setStages([])
@@ -61,10 +105,11 @@ export default function StandingsPage() {
 
   useEffect(() => {
     if (!season || view !== 'standings' || !selectedStage) return
+    const stage = (isCup && season === 'all') ? 'all' : selectedStage
     setLoading(true)
-    getStandings(competitionId, season, selectedStage)
+    getStandings(competitionId, season, stage)
       .then(data => {
-        if (selectedStage === 'knockout') {
+        if (stage === 'knockout') {
           setKnockout(data.knockout || [])
           setStandings([])
         } else {
@@ -75,17 +120,29 @@ export default function StandingsPage() {
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [competitionId, season, selectedStage, view])
-
+  // Fetch team list for stats filter (only when season/stat changes)
+  useEffect(() => {
+    if (!season || view !== 'stats') return
+    getStats(competitionId, season, statType, 'all')
+      .then(data => {
+        const teams = [...new Set(data.flatMap(r =>
+          [r.club_name, r.club_a_name, r.club_b_name].filter(Boolean)
+        ))].sort()
+        setStatTeamList(teams)
+      })
+      .catch(console.error)
+  }, [competitionId, season, view, statType])
   useEffect(() => {
     if (!season || view !== 'stats') return
     setLoading(true)
-    if (statType === 'top_scorers') {
-      getTopScorers(competitionId, season)
-        .then(setScorers)
-        .catch(console.error)
-        .finally(() => setLoading(false))
-    }
-  }, [competitionId, season, view, statType])
+    getStats(competitionId, season, statType, statTeamFilter)
+      .then(data => {
+        setAllScorers(data)
+        setScorers(data)
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [competitionId, season, view, statType, statTeamFilter])
 
   useEffect(() => {
     if (!season || view !== 'matches') return
@@ -132,6 +189,7 @@ export default function StandingsPage() {
           className="bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white
                      focus:outline-none focus:border-white/20 cursor-pointer"
         >
+          <option value="all" className="bg-[#0a0a0a]">Overall</option>
           {seasons.map(s => (
             <option key={s} value={s} className="bg-[#0a0a0a]">
               {s}/{(Number(s) + 1).toString().slice(-2)}
@@ -149,7 +207,7 @@ export default function StandingsPage() {
                      focus:outline-none focus:border-white/20 cursor-pointer"
         >
           <option value="standings" className="bg-[#0a0a0a]">Standings</option>
-          <option value="matches" className="bg-[#0a0a0a]">Matches</option>
+          {season !== 'all' && competitionId !== 'ALL5' && <option value="matches" className="bg-[#0a0a0a]">Matches</option>}
           <option value="stats" className="bg-[#0a0a0a]">Stats</option>
         </select>
 
@@ -168,16 +226,48 @@ export default function StandingsPage() {
           </select>
         )}
 
-        {view === 'stats' && (
+        {view === 'stats' && <>
+          <select
+            value={statTeamFilter}
+            onChange={e => setStatTeamFilter(e.target.value)}
+            className="bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-white/20 cursor-pointer"
+          >
+            <option value="all" className="bg-[#0a0a0a]">All Teams</option>
+            {statTeamList.map(t => (
+              <option key={t} value={t} className="bg-[#0a0a0a]">{t}</option>
+            ))}
+          </select>
           <select
             value={statType}
             onChange={e => setStatType(e.target.value)}
-            className="bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white
-                       focus:outline-none focus:border-white/20 cursor-pointer"
+            className="bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-white/20 cursor-pointer"
           >
-            <option value="top_scorers" className="bg-[#0a0a0a]">Top Scorers</option>
+
+            <optgroup label="Basic" className="bg-[#0a0a0a]">
+              <option value="top_scorers">Top Scorers</option>
+              <option value="top_assists">Top Assists</option>
+              <option value="most_appearances">Most Appearances</option>
+              <option value="most_minutes">Most Minutes</option>
+              <option value="most_cards">Most Cards</option>
+              <option value="super_sub">Super Subs (Impact off Bench)</option>
+              <option value="top_scorers_home">Top Scorers (Home)</option>
+              <option value="top_scorers_away">Top Scorers (Away)</option>
+              <option value="home_record">Home Record (by Team)</option>
+              <option value="away_record">Away Record (by Team)</option>
+            </optgroup>
+            <optgroup label="Per 90" className="bg-[#0a0a0a]">
+              <option value="goals_per_90">Goals per 90</option>
+              <option value="assists_per_90">Assists per 90</option>
+              <option value="contributions_per_90">Contributions per 90</option>
+              <option value="minutes_per_goal">Minutes per Goal</option>
+            </optgroup>
+            <optgroup label="Advanced" className="bg-[#0a0a0a]">
+              <option value="win_rate">Player Win Rate</option>
+              <option value="clean_sheets">Clean Sheets (GK)</option>
+              <option value="head_to_head">Head-to-Head Records</option>
+            </optgroup>
           </select>
-        )}
+        </>}
       </div>
 
       {/* Content */}
@@ -187,7 +277,7 @@ export default function StandingsPage() {
         selectedStage === 'knockout' ? (
           <KnockoutTable data={knockout} />
         ) : (
-          <StandingsTable data={standings} />
+          <StandingsTable data={standings} competitionId={competitionId} season={season} />
         )
       ) : view === 'matches' ? (
         <>
@@ -216,13 +306,13 @@ export default function StandingsPage() {
           <MatchesList data={matches} />
         </>
       ) : (
-        statType === 'top_scorers' && <ScorersTable data={scorers} />
+        <StatsTable data={scorers} statType={statType} />
       )}
     </div>
   )
 }
 
-function StandingsTable({ data }) {
+function StandingsTable({ data, competitionId, season }) {
   if (!data.length) return <p className="text-muted text-sm">No standings data available.</p>
 
   return (
@@ -244,7 +334,9 @@ function StandingsTable({ data }) {
         </thead>
         <tbody>
           {data.map((row, i) => (
-            <tr key={row.club_id} className="border-b border-border/50 last:border-0 hover:bg-surface-hover transition-colors">
+            <tr key={row.club_id} className={`border-b border-border/50 last:border-b-0 hover:bg-surface-hover transition-colors ${
+              ZONE_RULES[competitionId] && season !== 'all' ? ZONE_RULES[competitionId](season, i, data.length) : ''
+            }`}>
               <td className="py-3 px-4 text-muted">{i + 1}</td>
               <td className="py-3 px-4 font-medium text-white">{row.club_name}</td>
               <td className="text-center py-3 px-2 text-white/60">{row.played}</td>
@@ -259,41 +351,6 @@ function StandingsTable({ data }) {
                 </span>
               </td>
               <td className="text-center py-3 px-4 font-bold text-gold">{row.points}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-function ScorersTable({ data }) {
-  if (!data.length) return <p className="text-muted text-sm">No scorer data available.</p>
-
-  return (
-    <div className="bg-surface border border-border rounded-xl overflow-hidden">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-muted text-xs uppercase border-b border-border">
-            <th className="text-left py-3 px-4 w-8">#</th>
-            <th className="text-left py-3 px-4">Player</th>
-            <th className="text-left py-3 px-4">Club</th>
-            <th className="text-center py-3 px-2">Apps</th>
-            <th className="text-center py-3 px-2 font-semibold">Goals</th>
-            <th className="text-center py-3 px-2">Assists</th>
-            <th className="text-center py-3 px-4">Mins</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((row, i) => (
-            <tr key={`${row.player_id}-${i}`} className="border-b border-border/50 last:border-0 hover:bg-surface-hover transition-colors">
-              <td className="py-3 px-4 text-muted">{i + 1}</td>
-              <td className="py-3 px-4 font-medium text-white">{row.player_name}</td>
-              <td className="py-3 px-4 text-white/50">{row.club_name}</td>
-              <td className="text-center py-3 px-2 text-white/60">{row.appearances}</td>
-              <td className="text-center py-3 px-2 font-bold text-gold">{row.goals}</td>
-              <td className="text-center py-3 px-2 text-white/60">{row.assists}</td>
-              <td className="text-center py-3 px-4 text-white/40">{row.minutes_played}</td>
             </tr>
           ))}
         </tbody>
@@ -544,6 +601,81 @@ function LineupList({ players, goals = {}, assists = {} }) {
           ))}
         </>
       )}
+    </div>
+  )
+}
+
+function StatsTable({ data, statType }) {
+  if (!data || !data.length) return <p className="text-muted text-sm">No data available.</p>
+
+  const configs = {
+    top_scorers:        { cols: ['player_name', 'club_name', 'appearances', 'goals', 'games_with_goal'], highlight: 'goals' },
+    top_assists:        { cols: ['player_name', 'club_name', 'appearances', 'assists', 'games_with_assist'], highlight: 'assists' },
+    most_appearances:   { cols: ['player_name', 'club_name', 'appearances', 'minutes_played'], highlight: 'appearances' },
+    most_minutes:       { cols: ['player_name', 'club_name', 'minutes', 'appearances', 'goals', 'assists'], highlight: 'minutes' },
+    most_cards:         { cols: ['player_name', 'club_name', 'appearances', 'yellow_cards', 'red_cards', 'total_cards'], highlight: 'total_cards' },
+    super_sub:          { cols: ['player_name', 'club_name', 'sub_appearances', 'goals', 'assists', 'impact'], highlight: 'impact' },
+    goals_per_90:       { cols: ['player_name', 'club_name', 'goals', 'minutes', 'goals_per_90'], highlight: 'goals_per_90' },
+    assists_per_90:     { cols: ['player_name', 'club_name', 'assists', 'minutes', 'assists_per_90'], highlight: 'assists_per_90' },
+    contributions_per_90: { cols: ['player_name', 'club_name', 'goals', 'assists', 'minutes', 'contributions_per_90'], highlight: 'contributions_per_90' },
+    minutes_per_goal:   { cols: ['player_name', 'club_name', 'goals', 'minutes', 'mins_per_goal'], highlight: 'mins_per_goal' },
+    win_rate:           { cols: ['player_name', 'games_started', 'wins_when_started', 'start_win_pct', 'games_as_sub', 'wins_as_sub', 'sub_win_pct'], highlight: 'start_win_pct' },
+    clean_sheets:       { cols: ['player_name', 'club_name', 'appearances', 'clean_sheets', 'clean_sheet_pct'], highlight: 'clean_sheets' },
+    head_to_head:       { cols: ['club_a_name', 'club_b_name', 'total_matches', 'club_a_wins', 'draws', 'club_b_wins', 'club_a_goals', 'club_b_goals'], highlight: 'total_matches' },
+    home_record:        { cols: ['club_name', 'played', 'wins', 'draws', 'losses', 'goals_for', 'goals_against', 'points'], highlight: 'points' },
+    away_record:        { cols: ['club_name', 'played', 'wins', 'draws', 'losses', 'goals_for', 'goals_against', 'points'], highlight: 'points' },
+    top_scorers_home:   { cols: ['player_name', 'club_name', 'appearances', 'goals'], highlight: 'goals' },
+    top_scorers_away:   { cols: ['player_name', 'club_name', 'appearances', 'goals'], highlight: 'goals' },
+  }
+
+  const config = configs[statType] || { cols: Object.keys(data[0]), highlight: null }
+
+  const formatHeader = (col) =>
+    col.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+      .replace('Pct', '%').replace('Per 90', '/90')
+
+  const isNumeric = (col) => col !== 'player_name' && col !== 'club_name' && col !== 'club_a_name' && col !== 'club_b_name'
+
+  return (
+    <div className="bg-surface border border-border rounded-xl overflow-hidden">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-muted text-xs uppercase border-b border-border">
+            <th className="text-left py-3 px-4 w-8">#</th>
+            {config.cols.map(col => (
+              <th key={col} className={`py-3 px-3 ${isNumeric(col) ? 'text-center' : 'text-left'}`}>
+                {formatHeader(col)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row, i) => (
+            <tr key={i} className="border-b border-border/50 last:border-0 hover:bg-surface-hover transition-colors">
+              <td className="py-3 px-4 text-muted">{i + 1}</td>
+              {config.cols.map(col => (
+                <td
+                  key={col}
+                  className={`py-3 px-3 ${
+                    isNumeric(col) ? 'text-center' : 'text-left'
+                  } ${
+                    col === config.highlight ? 'font-bold text-gold' :
+                    col === 'player_name' || col === 'club_a_name' ? 'font-medium text-white' :
+                    col === 'club_name' || col === 'club_b_name' ? 'text-white/50' :
+                    col === 'red_cards' ? 'text-red-400' :
+                    col === 'yellow_cards' ? 'text-yellow-400' :
+                    'text-white/60'
+                  }`}
+                >
+                  {col.includes('pct') || col.includes('per_90') || col === 'contributions_per_90'
+                    ? `${row[col]}${col.includes('pct') ? '%' : ''}`
+                    : row[col] ?? '-'}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

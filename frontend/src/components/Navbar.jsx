@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Trophy, MessageCircle } from 'lucide-react'
+import { Trophy, MessageCircle, User } from 'lucide-react'
 
 export default function Navbar() {
   const { pathname } = useLocation()
@@ -18,7 +18,7 @@ export default function Navbar() {
         <span className="text-base font-semibold tracking-tight">Football Diary</span>
       </Link>
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 overflow-x-auto">
         <Link to="/" className={linkClass('/')}>
           <Trophy size={15} />
           Competitions
@@ -26,6 +26,10 @@ export default function Navbar() {
         <Link to="/chat" className={linkClass('/chat')}>
           <MessageCircle size={15} />
           Ask AI
+        </Link>
+        <Link to="/individual" className={linkClass('/individual')}>
+          <User size={15} />
+          Individual
         </Link>
       </div>
     </nav>

@@ -3,7 +3,16 @@ import {
   Tooltip, ResponsiveContainer, Cell
 } from 'recharts'
 
-const COLORS = ['#16a34a', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316']
+const COLORS = [
+  'rgba(255,255,255,0.45)',
+  'rgba(226,179,64,0.5)',
+  'rgba(100,160,255,0.4)',
+  'rgba(120,200,150,0.4)',
+  'rgba(180,140,255,0.4)',
+  'rgba(255,140,140,0.35)',
+  'rgba(130,210,200,0.4)',
+  'rgba(200,170,120,0.35)',
+]
 
 export default function ChartRenderer({ config }) {
   if (!config || !config.data) return null
