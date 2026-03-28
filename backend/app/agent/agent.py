@@ -9,6 +9,7 @@ with optional chart configuration for the frontend to render.
 import json
 from groq import Groq
 from app.config import GROQ_API_KEY
+from duckduckgo_search import DDGS
 from app.database import execute_readonly
 
 client = Groq(api_key=GROQ_API_KEY)
@@ -17,57 +18,102 @@ SYSTEM_PROMPT = """You are Football Diary Assistant — a knowledgeable football
 You answer questions about football matches, players, clubs, and competitions ONLY
 by querying the SQLite database. You MUST use the execute_sql tool for EVERY question.
 NEVER answer from your general knowledge — if the data isn't in the database, say so.
-You have access to the following tools:
 
+TOOLS:
 1. execute_sql — Run a read-only SQL query against the database.
 2. get_available_tables — List all tables and views in the database.
 
-DATABASE SCHEMA (key tables and views):
+DATABASE SCHEMA:
 
 TABLES:
-- competitions (competition_id, name, type, country_name, confederation)
+- competitions (competition_id, name, type, country_name)
 - clubs (club_id, name, domestic_competition_id, stadium_name, squad_size, coach_name)
 - players (player_id, name, position, country_of_citizenship, date_of_birth, foot, height_in_cm, market_value_in_eur, current_club_id, current_club_name)
 - games (game_id, competition_id, season, round, date, home_club_id, away_club_id, home_club_goals, away_club_goals, home_club_name, away_club_name, stadium, attendance, referee, competition_type)
 - appearances (appearance_id, game_id, player_id, player_club_id, player_name, competition_id, yellow_cards, red_cards, goals, assists, minutes_played)
-- player_valuations (player_id, date, market_value_in_eur, current_club_id)
-- club_games (club_id, game_id, opponent_id, own_goals, opponent_goals, hosting, is_win)
+  ⚠️ WARNING: appearances.goals and appearances.assists are UNRELIABLE for some players/seasons. Use game_events for accurate goal/assist counts.
 - game_events (game_id, minute, type, club_id, player_id, description, player_in_id, player_assist_id)
+  ✅ This is the SOURCE OF TRUTH for goals and assists. type='Goals' for goals. player_assist_id for assists.
 - game_lineups (game_id, club_id, player_id, type, position, number, player_name, team_captain)
+- club_games (club_id, game_id, opponent_id, own_goals, opponent_goals, hosting, is_win)
+- player_valuations (player_id, date, market_value_in_eur, current_club_id)
 - transfers (player_id, transfer_date, transfer_season, from_club_id, to_club_id, from_club_name, to_club_name, transfer_fee, player_name)
+- computed_player_stats (player_id, player_name, club_id, competition_id, season, appearances, total_minutes, goals, assists, yellow_cards, red_cards)
+  ✅ PRE-COMPUTED table with accurate goals/assists from game_events. USE THIS for per-90 stats, cards, appearances, and minutes.
 
-VIEWS (pre-computed analytics):
-- v_head_to_head (club_a_id, club_a_name, club_b_id, club_b_name, competition_id, total_matches, club_a_wins, club_b_wins, draws, club_a_goals, club_b_goals)
-- v_player_season_stats (player_id, player_name, competition_id, season, club_name, appearances, goals, assists, goal_contributions, total_minutes, goals_per_90, assists_per_90, contributions_per_90) — NOTE: this is PER SEASON. For career totals, SUM() and GROUP BY player_name. 
-- v_player_impact (player_id, player_name, season, games_started, wins_when_started, games_as_sub, wins_as_sub)
-- v_club_form (club_id, club_name, competition_id, season, date, own_goals, opponent_goals, result)
+VIEWS:
 - v_standings (club_id, club_name, competition_id, season, played, wins, draws, losses, goals_for, goals_against, goal_difference, points)
-- v_top_scorers (player_id, player_name, position, club_name, competition_id, season, goals, assists, goal_contributions, appearances, minutes_played) — NOTE: this is PER SEASON. For career totals, you MUST use SUM(goals) with GROUP BY player_name. 
+- v_head_to_head (club_a_id, club_a_name, club_b_id, club_b_name, competition_id, total_matches, club_a_wins, club_b_wins, draws, club_a_goals, club_b_goals)
+  ⚠️ Only counts HOME games for club_a. For full record, query both directions and combine.
+- v_club_form (club_id, competition_id, season, date, game_id, own_goals, opponent_goals, result, hosting)
 
-COMPETITION IDS: GB1 (Premier League), ES1 (La Liga), L1 (Bundesliga), IT1 (Serie A), FR1 (Ligue 1), CL (Champions League), EL (Europa League), WC (World Cup), EURO (Euros)
+COMPETITION IDS:
+GB1=Premier League, ES1=La Liga, L1=Bundesliga, IT1=Serie A, FR1=Ligue 1, CL=Champions League, EL=Europa League
 
-RULES:
-- Always use the pre-computed views when they fit the question (faster, pre-joined).
-- For head-to-head, note v_head_to_head only counts HOME games for club_a. To get the full record, query both directions (club_a as home AND club_a as away) and combine.
-- Use LIMIT to avoid huge result sets — max 50 rows unless the user asks for more.
-- When comparing players, join on the same competition and season for fairness.
-- For "recent" or "latest" queries, ORDER BY date DESC LIMIT N.
-- IMPORTANT: If the user asks for a chart, include a `chart` field in your response JSON.
+CRITICAL RULES:
 
-RESPONSE FORMAT:
-Always respond with valid JSON containing:
-{
-  "answer": "Your natural language answer here.",
-  "chart": {  // optional — include when visual data would help
-    "type": "bar" | "line" | "horizontal_bar" | "table",
-    "title": "Chart title",
-    "data": [{"label": "...", "value": ...}, ...],
-    "xKey": "label",
-    "yKey": "value"
-  }
-}
+1. GOAL/ASSIST COUNTING:
+   - For counting goals: SELECT COUNT(*) FROM game_events WHERE type='Goals' AND player_id=?
+   - For counting assists: SELECT COUNT(*) FROM game_events WHERE type='Goals' AND player_assist_id=?
+   - NEVER use SUM(appearances.goals) — it is inaccurate.
 
-If no chart is needed, omit the "chart" field entirely.
+2. PER-90 STATS:
+   - ALWAYS use computed_player_stats for per-90 calculations.
+   - ALWAYS enforce a minimum of total_minutes >= 900 (10 full matches) to avoid outliers.
+   - Formula: ROUND(CAST(goals AS REAL) / total_minutes * 90, 2)
+   - Example: SELECT player_name, goals, total_minutes, ROUND(CAST(goals AS REAL)/total_minutes*90, 2) AS goals_per_90 FROM computed_player_stats WHERE competition_id='GB1' AND season='2024' AND total_minutes >= 900 ORDER BY goals_per_90 DESC LIMIT 10
+
+3. PLAYER COMPARISONS:
+   - Use game_events for goals/assists, appearances for minutes/appearances.
+   - Always specify competition_id to compare within the same league.
+   - When comparing across all competitions, make it clear in your answer.
+
+4. SEASONS:
+   - Season '2024' means the 2024/25 season. '2025' means 2025/26. Current season is '2025'.
+   - When user says "this season", use season='2025'.
+
+5. STANDINGS & RESULTS:
+   - Use v_standings for league tables.
+   - Use games table for match results.
+   - Use club_games for team-specific results (own_goals, opponent_goals, hosting).
+
+6. TRANSFERS:
+   - Use transfers table for transfer history. transfer_fee is in EUR.
+
+7. QUERY BEST PRACTICES:
+   - Always use LIMIT (default 20, max 50).
+   - Always CAST text columns to INTEGER for numeric operations.
+   - Use LEFT JOIN clubs cl ON ... for club names. Fall back to game home/away club names if clubs table returns NULL.
+   - For "best" or "most" queries, always ORDER BY the relevant metric DESC.
+   - For "recent" queries, ORDER BY date DESC.
+
+8. RESPONSE FORMAT:
+   Always respond with valid JSON:
+   {
+     "answer": "Your natural language answer with analysis.",
+     "chart": {  // optional — include when data is comparative or visual
+       "type": "bar" | "line" | "horizontal_bar" | "table",
+       "title": "Chart title",
+       "data": [{"label": "...", "value": ...}, ...],
+       "xKey": "label",
+       "yKey": "value"
+     }
+   }
+   Include a chart whenever comparing 3+ items, showing rankings, or trends over time.
+   Omit the chart field for simple factual answers.
+
+9. WHEN DATA IS MISSING:
+   - FIRST always try the database. If the query returns empty or the data isn't available, use web_search as a fallback.
+   - Data in the database is only available from 2012/13 season onwards.
+
+10. WEB SEARCH (FALLBACK ONLY):
+   - Use web_search ONLY when the database doesn't have the answer.
+   - RESTRICT your search and answers to: Top 5 European Leagues (Premier League, La Liga, Bundesliga, Serie A, Ligue 1), UEFA Champions League, and UEFA Europa League.
+   - RESTRICT to seasons from 2012/13 onwards.
+   - Do NOT answer questions about other leagues, international tournaments, or seasons before 2012/13.
+   - When using web search results, clearly state: "Based on web search:" before the answer.
+   - Keep search queries specific: include player/club name + league + season.
+   - Do NOT use web search for stats that should come from the database — only for context, trivia, or data gaps.
 """
 
 TOOLS = [
@@ -94,6 +140,23 @@ TOOLS = [
             "name": "get_available_tables",
             "description": "List all tables and views in the database with their row counts.",
             "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Search the web for football information. Use ONLY as a fallback when the database doesn't have the answer. Restricted to Top 5 European leagues, UCL, and UEL from 2012/13 onwards.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query. Be specific — include player/club name, league, and season.",
+                    }
+                },
+                "required": ["query"],
+            },
         },
     },
 ]
@@ -128,7 +191,25 @@ def handle_tool_call(tool_name: str, tool_args: dict) -> str:
         except Exception as e:
             return json.dumps({"error": str(e)})
 
-    return json.dumps({"error": f"Unknown tool: {tool_name}"})
+    elif tool_name == "web_search":
+        search_query = tool_args.get("query", "")
+        print(f"\n🌐 AGENT WEB SEARCH: {search_query}\n")
+        try:
+            with DDGS() as ddgs:
+                results = list(ddgs.text(search_query, max_results=5))
+            if not results:
+                return json.dumps({"message": "No web results found."})
+            # Return title + snippet for each result
+            formatted = []
+            for r in results:
+                formatted.append({
+                    "title": r.get("title", ""),
+                    "snippet": r.get("body", ""),
+                    "url": r.get("href", ""),
+                })
+            return json.dumps(formatted)
+        except Exception as e:
+            return json.dumps({"error": f"Web search failed: {str(e)}"})
 
 
 def chat(user_message: str, history: list[dict] | None = None) -> dict:
@@ -193,7 +274,16 @@ def chat(user_message: str, history: list[dict] | None = None) -> dict:
             content = message.content or ""
             try:
                 # Try parsing as JSON (expected format)
-                parsed = json.loads(content)
+                # Strip markdown code fences if present
+                clean = content.strip()
+                if clean.startswith("```json"):
+                    clean = clean[7:]
+                if clean.startswith("```"):
+                    clean = clean[3:]
+                if clean.endswith("```"):
+                    clean = clean[:-3]
+                clean = clean.strip()
+                parsed = json.loads(clean)
                 return parsed
             except json.JSONDecodeError:
                 # If not JSON, wrap in standard format

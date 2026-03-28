@@ -7,9 +7,7 @@ const SUGGESTIONS = [
   'Compare Messi vs Ronaldo in Champions League',
   'Show me the Premier League top scorers 2023',
   'Head-to-head: Barcelona vs Real Madrid',
-  'Which player has the best goals per 90 this season?',
-  "Show me Liverpool's form in their last 10 matches",
-  'Who scored the most goals in the 2022 World Cup?',
+  'Which player has the best goals per 90 this season?'
 ]
 
 export default function ChatPage() {
